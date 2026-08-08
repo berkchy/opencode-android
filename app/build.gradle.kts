@@ -29,8 +29,10 @@ android {
         applicationId = "dev.opencode.android"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        val versionCodeProp = providers.gradleProperty("versionCode").orNull
+        val versionNameProp = providers.gradleProperty("versionName").orNull
+        versionCode = versionCodeProp?.toIntOrNull() ?: 1
+        versionName = versionNameProp ?: "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
