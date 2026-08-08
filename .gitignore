@@ -13,3 +13,4 @@ keystore-ci.jks
 keystore.jks
 !debug.keystore
 keystore.properties
+app/src/main/assets/opencode_bin/

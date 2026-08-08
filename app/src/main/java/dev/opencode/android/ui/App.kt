@@ -5,19 +5,33 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import dev.opencode.android.OpenCodeApp
+import dev.opencode.android.server.OpenCodeServerManager
 import dev.opencode.android.ui.screens.ChatScreen
 import dev.opencode.android.ui.screens.ConnectScreen
 import dev.opencode.android.ui.screens.SessionsScreen
 import dev.opencode.android.ui.screens.SettingsScreen
+import kotlinx.coroutines.launch
 
 object Routes {
     const val CONNECT = "connect"
@@ -29,24 +43,40 @@ object Routes {
 fun OpenCodeRoot() {
     val app = LocalContext.current.applicationContext as OpenCodeApp
     val connection by app.connection.collectAsStateWithLifecycle()
-    val navController = rememberNavController()
+    val serverStatus by app.server.status.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
 
-    LaunchedEffect(connection.isValid) {
-        if (!connection.isValid && navController.currentDestination?.route != Routes.CONNECT) {
-            navController.navigate(Routes.CONNECT) {
-                popUpTo(0) { inclusive = true }
-            }
+    if (app.embeddedPrefs.enabled) {
+        when (serverStatus) {
+            is OpenCodeServerManager.Status.Running -> MainNav(startAtSessions = true)
+            is OpenCodeServerManager.Status.Failed -> EmbeddedFailed(
+                message = (serverStatus as OpenCodeServerManager.Status.Failed).message,
+                onRetry = { app.server.restart() },
+                onSwitchToRemote = {
+                    scope.launch {
+                        app.settings.saveEmbedded(app.embeddedPrefs.copy(enabled = false))
+                    }
+                },
+            )
+            is OpenCodeServerManager.Status.Starting,
+            is OpenCodeServerManager.Status.Stopped,
+            -> LoadingScreen("Gömülü sunucu başlatılıyor…")
         }
-        if (connection.isValid && navController.currentDestination?.route == Routes.CONNECT) {
-            navController.navigate(Routes.SESSIONS) {
-                popUpTo(Routes.CONNECT) { inclusive = true }
-            }
+    } else {
+        if (connection.isValid) {
+            MainNav(startAtSessions = true)
+        } else {
+            MainNav(startAtSessions = false)
         }
     }
+}
 
+@Composable
+private fun MainNav(startAtSessions: Boolean) {
+    val navController = rememberNavController()
     NavHost(
         navController = navController,
-        startDestination = if (connection.isValid) Routes.SESSIONS else Routes.CONNECT,
+        startDestination = if (startAtSessions) Routes.SESSIONS else Routes.CONNECT,
         enterTransition = {
             fadeIn(tween(280)) + slideInHorizontally(tween(280)) { it / 10 }
         },
@@ -90,5 +120,56 @@ fun OpenCodeRoot() {
                 onBack = { navController.popBackStack() },
             )
         }
+    }
+}
+
+@Composable
+private fun EmbeddedFailed(
+    message: String,
+    onRetry: () -> Unit,
+    onSwitchToRemote: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            text = "Gömülü sunucu açılamadı",
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.error,
+        )
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        Button(
+            onClick = onRetry,
+            modifier = Modifier.padding(top = 20.dp),
+        ) {
+            Text("Tekrar dene")
+        }
+        TextButton(onClick = onSwitchToRemote) {
+            Text("Uzak sunucu kullan")
+        }
+    }
+}
+
+@Composable
+private fun LoadingScreen(text: String) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        CircularProgressIndicator()
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 12.dp),
+        )
     }
 }

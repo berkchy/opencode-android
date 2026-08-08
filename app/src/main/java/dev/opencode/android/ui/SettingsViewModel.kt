@@ -4,8 +4,12 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.opencode.android.OpenCodeApp
+import dev.opencode.android.data.prefs.EmbeddedPrefs
+import dev.opencode.android.server.OpenCodeServerManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -19,15 +23,42 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     val connection = app.connection
     val models = repo.models
+    val serverStatus: StateFlow<OpenCodeServerManager.Status> = app.server.status
+
+    private val _embedded = MutableStateFlow(app.embeddedPrefs)
+    val embedded = _embedded.asStateFlow()
 
     private val _status = MutableStateFlow<String?>(null)
     val status = _status.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            _embedded.value = app.settings.embedded.first()
+        }
+    }
 
     fun logout() {
         viewModelScope.launch {
             app.settings.clear()
             app.resetConnection()
         }
+    }
+
+    fun saveEmbedded(enabled: Boolean, model: String, apiKey: String, restart: Boolean = true) {
+        val prefs = EmbeddedPrefs(
+            enabled = enabled,
+            model = model.ifBlank { EmbeddedPrefs().model },
+            apiKey = apiKey,
+        )
+        _embedded.value = prefs
+        viewModelScope.launch {
+            app.settings.saveEmbedded(prefs)
+            if (enabled && restart) app.server.restart() else app.server.stop()
+        }
+    }
+
+    fun stopEmbeddedServer() {
+        app.server.stop()
     }
 
     fun addProvider(providerId: String, name: String, baseUrl: String, apiKey: String, modelsText: String) {

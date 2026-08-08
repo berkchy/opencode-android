@@ -2,6 +2,8 @@ package dev.opencode.android.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -35,9 +38,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.opencode.android.data.prefs.EmbeddedDefaults
+import dev.opencode.android.server.OpenCodeServerManager
 import dev.opencode.android.ui.SettingsViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
@@ -46,7 +51,12 @@ fun SettingsScreen(
     val connection by vm.connection.collectAsState()
     val models by vm.models.collectAsState()
     val status by vm.status.collectAsState()
+    val embedded by vm.embedded.collectAsState()
+    val serverStatus by vm.serverStatus.collectAsState()
 
+    var embeddedOn by remember { mutableStateOf(embedded.enabled) }
+    var embeddedModel by remember { mutableStateOf(embedded.model) }
+    var embeddedApiKey by remember { mutableStateOf(embedded.apiKey) }
     var showAddProvider by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -70,6 +80,81 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             SectionTitle("Bağlantı")
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Cihaz içi sunucu (gömülü)", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "opencode binary'si cihazda çalışır. Ücretsiz Zen modelleri varsayılan.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = embeddedOn, onCheckedChange = { embeddedOn = it })
+            }
+
+            statusText(serverStatus)?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                )
+            }
+
+            if (embeddedOn) {
+                OutlinedTextField(
+                    value = embeddedModel,
+                    onValueChange = { embeddedModel = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Model") },
+                    singleLine = true,
+                )
+                Text(
+                    "Ücretsiz Zen modelleri (zorunlu anahtar yok):",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    EmbeddedDefaults.FREE_MODELS.forEach { m ->
+                        OutlinedButton(
+                            onClick = { embeddedModel = m },
+                            modifier = Modifier.padding(bottom = 0.dp),
+                        ) {
+                            Text(m.removePrefix("opencode/"))
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = embeddedApiKey,
+                    onValueChange = { embeddedApiKey = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Zen API anahtarı (isteğe bağlı)") },
+                    placeholder = { Text("oc_...") },
+                    singleLine = true,
+                )
+                Button(
+                    onClick = { vm.saveEmbedded(embeddedOn, embeddedModel, embeddedApiKey) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Uygula ve yeniden başlat")
+                }
+                OutlinedButton(onClick = { vm.stopEmbeddedServer() }) {
+                    Text("Sunucuyu durdur")
+                }
+            } else {
+                OutlinedButton(
+                    onClick = { vm.saveEmbedded(false, embeddedModel, embeddedApiKey, restart = false) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Uzak sunucuya bağlan")
+                }
+            }
+
+            HorizontalDivider()
+
             Text(
                 text = connection.serverUrl,
                 style = MaterialTheme.typography.bodyLarge,
@@ -79,7 +164,7 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                Text("Sunucu bağlantısını sil")
+                Text("Kayıtlı sunucu bağlantısını sil")
             }
 
             HorizontalDivider()
@@ -146,6 +231,14 @@ fun SettingsScreen(
             onDismiss = { showAddProvider = false },
         )
     }
+}
+
+@Composable
+private fun statusText(status: OpenCodeServerManager.Status): String? = when (status) {
+    is OpenCodeServerManager.Status.Running -> "Gömülü sunucu çalışıyor: 127.0.0.1:${status.port}"
+    is OpenCodeServerManager.Status.Starting -> "Gömülü sunucu başlatılıyor…"
+    is OpenCodeServerManager.Status.Stopped -> "Gömülü sunucu durdu"
+    is OpenCodeServerManager.Status.Failed -> "Hata: ${status.message}"
 }
 
 @Composable
