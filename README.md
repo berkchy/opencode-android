@@ -56,6 +56,21 @@ keytool -genkey -v -keystore keystore.jks -alias opencode -keyalg RSA -keysize 2
 base64 -w0 keystore.jks   # paste the output into KEYSTORE_BASE64
 ```
 
+## Embedded server
+
+The app bundles the `opencode-linux-arm64-musl` binary (built into the APK in CI)
+and can run it **on-device** — no external server, no Termux needed:
+
+- Default `embedded` mode: on first launch the app starts its own loopback server
+  (`127.0.0.1:<port>`) and auto-connects. OpenCode Zen **free** models
+  (`opencode/deepseek-v4-flash-free`, etc.) are used out of the box, no API key
+  required. An optional Zen key can be added in Settings.
+- The binary is pinned and downloaded in `.github/workflows/build.yml`
+  (step "Bundle embedded opencode binary"), cached and placed at
+  `app/src/main/assets/opencode_bin/opencode`.
+- To use a remote server instead, switch off "Cihaz iç sunucu" in Settings and
+  connect normally.
+
 ## Releases
 
 `VERSION` at the repo root holds the current version (`1.0.0`). Each APK is versioned from it:
