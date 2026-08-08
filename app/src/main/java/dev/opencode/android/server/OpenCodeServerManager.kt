@@ -19,6 +19,7 @@ import java.net.HttpURLConnection
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.URL
+import kotlin.collections.buildMap
 
 /**
  * Runs the bundled opencode binary (opencode-linux-arm64-musl) as a local
@@ -54,6 +55,9 @@ class OpenCodeServerManager(private val context: Context) {
             false
         }
 
+    private val homeDir: File get() = File(context.filesDir, "home")
+    private val serverLog: File get() = File(context.filesDir, "server.log")
+
     fun start(prefs: EmbeddedPrefs) {
         if (_status.value is Status.Running || _status.value is Status.Starting) return
         lastPrefs = prefs
@@ -68,6 +72,8 @@ class OpenCodeServerManager(private val context: Context) {
             val port = findFreePort()
             try {
                 withContext(Dispatchers.IO) {
+                    workspaceDir.mkdirs()
+                    homeDir.mkdirs()
                     writeConfig(prefs)
                     startProcess(prefs, port)
                 }
@@ -78,7 +84,16 @@ class OpenCodeServerManager(private val context: Context) {
             } catch (e: Exception) {
                 process?.let { kill(it) }
                 process = null
-                _status.value = Status.Failed(e.message ?: "Sunucu açılamadı")
+                _status.value = Status.Failed(
+                    buildString {
+                        append(e.message ?: "Sunucu açılamadı")
+                        val tail = logTail()
+                        if (tail.isNotEmpty()) {
+                            append("\n\nSon log:\n")
+                            append(tail)
+                        }
+                    },
+                )
             }
         }
     }
@@ -140,7 +155,19 @@ class OpenCodeServerManager(private val context: Context) {
     }
 
     private fun startProcess(prefs: EmbeddedPrefs, port: Int) {
-        val env = mapOf("OPENCODE_API_KEY" to prefs.apiKey).filterValues { it.isNotBlank() }
+        val env = buildMap {
+            put("HOME", homeDir.absolutePath)
+            put("XDG_DATA_HOME", File(homeDir, ".local/share").absolutePath)
+            put("XDG_CONFIG_HOME", File(homeDir, ".config").absolutePath)
+            put("XDG_CACHE_HOME", File(homeDir, ".cache").absolutePath)
+            put("XDG_STATE_HOME", File(homeDir, ".local/state").absolutePath)
+            put("OPENCODE_CONFIG", configFile.absolutePath)
+            if (prefs.apiKey.isNotBlank()) put("OPENCODE_API_KEY", prefs.apiKey)
+            put("OPENCODE_SERVER_USERNAME", "opencode")
+        }
+        env.keys.forEach {
+            File(env.getValue(it)).apply { parentFile?.mkdirs(); mkdirs() }
+        }
         val pb = ProcessBuilder(
             binaryFile.absolutePath,
             "--hostname", "127.0.0.1",
@@ -152,10 +179,37 @@ class OpenCodeServerManager(private val context: Context) {
         pb.redirectErrorStream(true)
         val p = pb.start()
         process = p
-        // Drain stdout/stderr so the pipe never fills and blocks the child.
+        // Keep a rolling server log so failures can be diagnosed.
+        val logFile = serverLog
         Thread {
-            p.inputStream.bufferedReader().forEachLine { }
+            val writer = java.io.FileWriter(logFile, true)
+            try {
+                p.inputStream.bufferedReader().forEachLine { line ->
+                    writer.appendLine(line)
+                }
+            } catch (_: Exception) {
+            } finally {
+                try {
+                    writer.flush()
+                    writer.close()
+                } catch (_: Exception) {
+                }
+            }
         }.start()
+    }
+
+    private fun logTail(maxBytes: Int = 4096): String {
+        return try {
+            if (!serverLog.exists()) return ""
+            val s = serverLog.length()
+            val skip = (s - maxBytes).coerceAtLeast(0L)
+            serverLog.inputStream().use { input ->
+                input.skip(skip)
+                input.readBytes().toString(Charsets.UTF_8)
+            }.trim()
+        } catch (_: Exception) {
+            ""
+        }
     }
 
     private suspend fun waitForHealth(port: Int) {
