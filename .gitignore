@@ -9,5 +9,7 @@ captures/
 .externalNativeBuild/
 .cxx/
 *.keystore
+keystore-ci.jks
+keystore.jks
 !debug.keystore
 keystore.properties

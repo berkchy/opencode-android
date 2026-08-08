@@ -48,6 +48,51 @@ jobs:
           gradle-version: '8.13'
           cache-disabled: false
 
+      - name: Cache CI signing key
+        uses: actions/cache@v4
+        with:
+          path: keystore-ci.jks
+          key: opencode-signing-key-v1
+
+      - name: Prepare signing keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -e
+          if [ -n "${KEYSTORE_BASE64:-}" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > keystore.jks
+            cat > keystore.properties <<EOF
+            storeFile=keystore.jks
+            storePassword=$KEYSTORE_PASSWORD
+            keyAlias=$KEY_ALIAS
+            keyPassword=$KEY_PASSWORD
+            EOF
+            echo "Using configured signing secrets."
+          else
+            PASS="opencode-ci-signing"
+            if [ ! -f keystore-ci.jks ]; then
+              keytool -genkeypair -v \
+                -keystore keystore-ci.jks -alias opencode \
+                -keyalg RSA -keysize 2048 -validity 10000 \
+                -storepass "$PASS" -keypass "$PASS" \
+                -dname "CN=opencode-android, OU=Android, O=berkchy, L=Internet, ST=Internet, C=XX"
+              echo "Generated fresh CI signing key."
+            else
+              echo "Restored cached CI signing key."
+            fi
+            cat > keystore.properties <<EOF
+            storeFile=keystore-ci.jks
+            storePassword=$PASS
+            keyAlias=opencode
+            keyPassword=$PASS
+            EOF
+            echo "keystore.properties:"
+            cat keystore.properties
+          fi
+
       - name: Build Debug + Release APKs
         run: |
           VER="$VERSION"
