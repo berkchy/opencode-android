@@ -1,18 +1,6 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.util.Properties
 
-fun loadSigningConfigIfPresent(): android.signing.SigningConfig? {
-    val propsFile = rootProject.file("keystore.properties")
-    if (!propsFile.exists()) return null
-    val props = Properties().apply { propsFile.inputStream().use { load(it) } }
-    return signingConfigs.create("release") {
-        storeFile = rootProject.file(props.getProperty("storeFile"))
-        storePassword = props.getProperty("storePassword")
-        keyAlias = props.getProperty("keyAlias")
-        keyPassword = props.getProperty("keyPassword")
-    }
-}
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -37,6 +25,19 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        val propsFile = rootProject.file("keystore.properties")
+        if (propsFile.exists()) {
+            val props = Properties().apply { propsFile.inputStream().use { load(it) } }
+            create("release") {
+                storeFile = rootProject.file(props.getProperty("storeFile"))
+                storePassword = props.getProperty("storePassword")
+                keyAlias = props.getProperty("keyAlias")
+                keyPassword = props.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -44,7 +45,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig = loadSigningConfigIfPresent()
+            if (rootProject.file("keystore.properties").exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
         debug {
             applicationIdSuffix = ".debug"
