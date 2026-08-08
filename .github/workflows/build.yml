@@ -64,12 +64,8 @@ jobs:
           set -e
           if [ -n "${KEYSTORE_BASE64:-}" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > keystore.jks
-            cat > keystore.properties <<EOF
-            storeFile=keystore.jks
-            storePassword=$KEYSTORE_PASSWORD
-            keyAlias=$KEY_ALIAS
-            keyPassword=$KEY_PASSWORD
-            EOF
+            printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+              keystore.jks "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties
             echo "Using configured signing secrets."
           else
             PASS="opencode-ci-signing"
@@ -83,12 +79,8 @@ jobs:
             else
               echo "Restored cached CI signing key."
             fi
-            cat > keystore.properties <<EOF
-            storeFile=keystore-ci.jks
-            storePassword=$PASS
-            keyAlias=opencode
-            keyPassword=$PASS
-            EOF
+            printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+              keystore-ci.jks "$PASS" opencode "$PASS" > keystore.properties
             echo "keystore.properties:"
             cat keystore.properties
           fi
