@@ -56,6 +56,14 @@ keytool -genkey -v -keystore keystore.jks -alias opencode -keyalg RSA -keysize 2
 base64 -w0 keystore.jks   # paste the output into KEYSTORE_BASE64
 ```
 
+## Releases
+
+`VERSION` at the repo root holds the current version (`1.0.0`). Each APK is versioned from it:
+run the **Build APK** workflow manually (`workflow_dispatch`) with:
+
+- `release` = `true` → tags `vX.Y.Z`, uploads both APKs to a GitHub Release, then bumps `VERSION`.
+- `bump` = `patch` | `minor` | `major` → next-version bump after the release (default `patch`).
+
 ## License
 
 AGPL-3.0 — see [LICENSE](LICENSE). Built on opencode (AGPL-3.0); the derivative stays open under the same license.
