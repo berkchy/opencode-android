@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Public
@@ -27,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -86,7 +88,7 @@ fun ConnectScreen(
             placeholder = { Text("http://192.168.1.10:3587") },
             leadingIcon = { Icon(Icons.Filled.Public, contentDescription = null) },
             singleLine = true,
-            keyboardOptions = androidx.compose.ui.text.input.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
         )
         OutlinedTextField(
             value = vm.username.collectAsState().value,
@@ -107,7 +109,7 @@ fun ConnectScreen(
         )
 
         Button(
-            onClick = { vm.testAndSave(onConnected) },
+            onClick = { vm.testOrSave { onConnected() } },
             modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
             enabled = !testing,
         ) {

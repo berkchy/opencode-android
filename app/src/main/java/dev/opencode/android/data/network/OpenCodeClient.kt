@@ -2,7 +2,10 @@ package dev.opencode.android.data.network
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -46,7 +49,7 @@ class OpenCodeClient(
     private val authHeader: String? by lazy {
         if (password.isNullOrEmpty()) null
         else "Basic " + Base64.getEncoder().encodeToString(
-            "${username.ifNullOrEmpty("opencode")}:$password".toByteArray()
+            "${username?.takeIf { it.isNotEmpty() } ?: "opencode"}:$password".toByteArray()
         )
     }
 
@@ -57,9 +60,6 @@ class OpenCodeClient(
         request.header("Accept", "application/json")
         return request
     }
-
-    private inline fun <reified T> parseObject(text: String?): T =
-        json.decodeFromString<T>(text ?: "null")
 
     private suspend fun <T> execute(
         request: Request,

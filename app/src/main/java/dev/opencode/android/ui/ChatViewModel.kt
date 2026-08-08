@@ -163,7 +163,7 @@ class ChatViewModel(
 
     private fun connectEventStream() {
         try {
-            repo.client().openEvent(
+            repo.client().openEventStream(
                 listener = object : dev.opencode.android.data.network.ServerEventListener {
                     override fun onEvent(event: dev.opencode.android.data.network.ServerEvent) {
                         handleEvent(event)

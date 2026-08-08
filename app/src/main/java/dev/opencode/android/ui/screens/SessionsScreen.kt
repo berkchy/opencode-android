@@ -108,7 +108,7 @@ fun SessionsScreen(
                     Icon(Icons.Filled.Add, contentDescription = "Yeni oturum")
                 }
             },
-        ) { inner ->
+        ) { innerPadding ->
             when {
                 sessions.isEmpty() && loading -> {
                     Box(
