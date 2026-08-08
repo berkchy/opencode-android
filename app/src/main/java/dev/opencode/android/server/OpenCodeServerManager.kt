@@ -156,6 +156,7 @@ class OpenCodeServerManager(private val context: Context) {
 
     private fun startProcess(prefs: EmbeddedPrefs, port: Int) {
         val env = buildMap {
+            put("TMPDIR", File(homeDir, "tmp").absolutePath)
             put("HOME", homeDir.absolutePath)
             put("XDG_DATA_HOME", File(homeDir, ".local/share").absolutePath)
             put("XDG_CONFIG_HOME", File(homeDir, ".config").absolutePath)
