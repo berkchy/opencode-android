@@ -90,7 +90,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/opencode_bin
-          key: opencode-musl-v1.18.15
+          key: opencode-musl-v1.18.15-lib2
 
       - name: Bundle embedded opencode binary
         if: steps.ocbin-cache.outputs.cache-hit != 'true'
@@ -102,7 +102,13 @@ jobs:
           tar -xzf /tmp/opencode-musl.tar.gz -C /tmp
           cp /tmp/opencode app/src/main/assets/opencode_bin/opencode
           chmod +x app/src/main/assets/opencode_bin/opencode
-          ls -la app/src/main/assets/opencode_bin/
+          curl -fsSL -o /tmp/musl-cross.tgz "https://musl.cc/aarch64-linux-musl-cross.tgz"
+          mkdir -p /tmp/musl-cross
+          tar -xzf /tmp/musl-cross.tgz -C /tmp/musl-cross
+          MUSL_LIB=$(find /tmp/musl-cross -name "ld-musl-aarch64.so.1" -printf "%h\n" | head -1)
+          echo "musl lib dir: $MUSL_LIB"
+          cp -a "$MUSL_LIB" app/src/main/assets/opencode_bin/lib
+          ls -la app/src/main/assets/opencode_bin/ app/src/main/assets/opencode_bin/lib/
 
       - name: Build Debug + Release APKs
         run: |

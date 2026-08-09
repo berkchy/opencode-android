@@ -44,6 +44,7 @@ class OpenCodeServerManager(private val context: Context) {
 
     private val binaryDir: File get() = File(context.filesDir, "ocbin")
     private val binaryFile: File get() = File(binaryDir, "opencode")
+    private val loaderFile: File get() = File(binaryDir, "lib/ld-musl-aarch64.so.1")
     private val workspaceDir: File get() = File(context.filesDir, "workspace")
     private val configFile: File get() = File(workspaceDir, "opencode.json")
 
@@ -132,6 +133,31 @@ class OpenCodeServerManager(private val context: Context) {
             }
         }
         binaryFile.setExecutable(true, true)
+        // The musl build is dynamically linked and needs its loader + libs.
+        copyAssetDir("opencode_bin/lib", File(binaryDir, "lib"))
+        if (loaderFile.exists()) loaderFile.setExecutable(true, true)
+    }
+
+    private fun copyAssetDir(assetPath: String, destDir: File) {
+        try {
+            context.assets.list(assetPath)?.forEach { child ->
+                val childPath = "$assetPath/$child"
+                val isDir = context.assets.list(childPath)?.isNotEmpty() ?: false
+                if (isDir) {
+                    copyAssetDir(childPath, File(destDir, child))
+                } else {
+                    val out = File(destDir, child)
+                    if (!out.exists() || out.length() == 0L) {
+                        out.parentFile?.mkdirs()
+                        context.assets.open(childPath).use { input ->
+                            out.outputStream().use { output -> input.copyTo(output) }
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            // no lib dir bundled -> the binary may be a static build
+        }
     }
 
     private fun writeConfig(prefs: EmbeddedPrefs) {
@@ -155,6 +181,7 @@ class OpenCodeServerManager(private val context: Context) {
     }
 
     private fun startProcess(prefs: EmbeddedPrefs, port: Int) {
+        val libDir = File(binaryDir, "lib")
         val env = buildMap {
             put("TMPDIR", File(homeDir, "tmp").absolutePath)
             put("HOME", homeDir.absolutePath)
@@ -169,14 +196,25 @@ class OpenCodeServerManager(private val context: Context) {
         env.keys.forEach {
             File(env.getValue(it)).apply { parentFile?.mkdirs(); mkdirs() }
         }
-        val pb = ProcessBuilder(
-            binaryFile.absolutePath,
+
+        val args = listOf(
             "--hostname", "127.0.0.1",
             "--port", port.toString(),
             "--log-level", "warn",
         )
+        // The musl build is dynamically linked: run it through the bundled
+        // musl loader with its lib dir on the search path.
+        val cmd = if (loaderFile.exists()) {
+            listOf(loaderFile.absolutePath, binaryFile.absolutePath) + args
+        } else {
+            listOf(binaryFile.absolutePath) + args
+        }
+        val pb = ProcessBuilder(cmd)
         pb.directory(workspaceDir)
         pb.environment().putAll(env)
+        if (libDir.exists()) {
+            pb.environment()["LD_LIBRARY_PATH"] = libDir.absolutePath
+        }
         pb.redirectErrorStream(true)
         val p = pb.start()
         process = p
