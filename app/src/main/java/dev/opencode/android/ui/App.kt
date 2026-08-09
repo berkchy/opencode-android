@@ -136,6 +136,7 @@ private fun EmbeddedFailed(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
+        val clipboard = LocalClipboardManager.current
         Text(
             text = "Gömülü sunucu açılamadı",
             style = MaterialTheme.typography.titleLarge,
@@ -158,7 +159,7 @@ private fun EmbeddedFailed(
         }
         TextButton(
             onClick = {
-                LocalClipboardManager.current.setText(AnnotatedString(message))
+                clipboard.setText(AnnotatedString(message))
             },
         ) {
             Text("Hatayı kopyala")
