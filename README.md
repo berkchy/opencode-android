@@ -33,7 +33,18 @@ Optionally password-protect it:
 OPENCODE_SERVER_PASSWORD=mysecret opencode serve --port 3587
 ```
 
-In the app, enter the server address, e.g. `http://192.168.1.20:3587`.
+In the app, enter the server address once — the connection is remembered, so the
+next launches go straight to your sessions. e.g. `http://192.168.1.20:3587` (same
+phone: `http://127.0.0.1:3587`).
+
+### Running the server on your phone (Termux)
+
+Host `opencode serve` yourself in Termux (full agent with file/terminal/MCP tools)
+and the app connects to `127.0.0.1` or your phone's LAN address.
+
+→ **Step-by-step guide: [docs/TERMUX-SERVER.md](docs/TERMUX-SERVER.md)**
+(Termux-native and proot installs, config, background keep-alive, LAN access,
+troubleshooting).
 
 ## Build
 
@@ -56,33 +67,13 @@ keytool -genkey -v -keystore keystore.jks -alias opencode -keyalg RSA -keysize 2
 base64 -w0 keystore.jks   # paste the output into KEYSTORE_BASE64
 ```
 
-## Embedded server
-
-The app bundles the `opencode-linux-arm64-musl` binary (built into the APK in CI)
-and can run it **on-device** — no external server, no Termux needed:
-
-- Default `embedded` mode: on first launch the app starts its own loopback server
-  (`127.0.0.1:<port>`) and auto-connects. OpenCode Zen **free** models
-  (`opencode/deepseek-v4-flash-free`, etc.) are used out of the box, no API key
-  required. An optional Zen key can be added in Settings.
-- **Requires Android 12+ (API 31+).** On Android ≤ 11 the system seccomp policy
-  blocks Bun's runtime (the bundled binary dies with `Bad system call`), so the app
-  shows a clear message and falls back to the connect screen.
-- The binary is pinned and downloaded in `.github/workflows/build.yml`
-  (step "Bundle embedded opencode binary"), cached and placed at
-  `app/src/main/assets/opencode_bin/opencode`.
-- To use a remote server instead, switch off "Cihaz iç sunucu" in Settings and
-  connect normally.
-
-### Running the server on your phone (Termux)
+## Running the server on your phone (Termux)
 
 On devices where the embedded binary can't run (or when you want the full agent with
 file/terminal/MCP tool access), host `opencode serve` yourself in Termux — the app
 then connects to `127.0.0.1` or your phone's LAN address.
 
 → **Full step-by-step guide: [docs/TERMUX-SERVER.md](docs/TERMUX-SERVER.md)**
-(Termux-native and proot installs, config, background keep-alive, LAN access,
-troubleshooting).
 
 ## Releases
 

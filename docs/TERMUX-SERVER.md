@@ -5,13 +5,10 @@ run anywhere — a PC, a VPS, or on the phone itself. This guide explains how to
 it **on the phone via Termux**, so you get a local agent with full tool access
 (file editing, terminal, MCP) without buying a second machine.
 
-> **Why Termux instead of the app's built-in server?**
-> The APK bundles the opencode binary and can start it by itself ("Gömülü sunucu").
-> That path works on **Android 12+ (API 31+)**. On older systems (Android 11 / API 30
-> and below) Android's seccomp kills Bun's runtime with `Bad system call` — this is a
-> device/OS restriction, not an app bug. Running opencode under **Termux** gives the
-> binary a real Unix environment (shell, libs, storage) and works around that limit on
-> more devices. If your phone is Android 12+, either route works.
+> **Why Termux instead of a built-in server?**
+> Recent app versions removed the bundled on-device binary to keep the APK light;
+> the binary's runtime also can't run under Android 11/seccomp. Running opencode
+> under **Termux** gives the binary a real Unix environment (shell, libs, storage).
 
 ---
 
@@ -196,14 +193,14 @@ sv-enable opencode
 
 ### Same phone (recommended)
 
-1. Open the app → **Settings**.
-2. Switch **"Cihaz içi sunucu (gömülü)"** **off** — this activates the normal
-   "bağlan" (connect) flow.
-3. In the connect screen enter:
-   - Server: `http://127.0.0.1:3000`
+1. Open the app. If no server is saved yet, the **connect** screen appears.
+2. Enter:
+   - Server: `http://127.0.0.1:3000` (when both server and app are on the phone)
    - Username: `opencode`
    - Password: your `OPENCODE_SERVER_PASSWORD`
-4. Connect. Sessions, streaming chat, model picker and file attachments all work.
+3. Connect. The connection is **remembered** — next app launches go straight to
+   your sessions. To switch servers later, use Settings → "Kayıtlı sunucu
+   bağlantısını sil".
 
 ### Any device on the same Wi‑Fi (LAN)
 
@@ -257,4 +254,3 @@ the whole network.
 ## Related
 
 - Full server docs: <https://opencode.ai/docs/server/>
-- Bundled on-device server (Android 12+ only): see `README.md` → *Embedded server*.

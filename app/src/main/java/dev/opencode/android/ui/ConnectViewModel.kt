@@ -7,6 +7,7 @@ import dev.opencode.android.OpenCodeApp
 import dev.opencode.android.data.network.JsonProvider
 import dev.opencode.android.data.network.OpenCodeClient
 import dev.opencode.android.data.prefs.Connection
+import dev.opencode.android.util.AppLog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
@@ -61,12 +62,14 @@ class ConnectViewModel(application: Application) : AndroidViewModel(application)
                             password = password.value,
                         ),
                     )
+                    AppLog.i("connected to $url")
                     _status.value = "Bağlantı kuruldu"
                     andNavigate()
                 } else {
                     _status.value = "Sunucu yanıt vermedi (health)"
                 }
             } catch (e: Exception) {
+                AppLog.e("connect failed to $url", e)
                 _status.value = e.message ?: "Bağlantı hatası"
             } finally {
                 _testing.value = false

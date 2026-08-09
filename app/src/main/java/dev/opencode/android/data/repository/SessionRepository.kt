@@ -8,10 +8,13 @@ import dev.opencode.android.data.network.Message
 import dev.opencode.android.data.network.Model
 import dev.opencode.android.data.network.OpenCodeClient
 import dev.opencode.android.data.network.Session
+import dev.opencode.android.data.prefs.FreeModels
+import dev.opencode.android.util.AppLog
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -28,27 +31,44 @@ class SessionRepository(
     private val sessionDao = db.sessionDao()
     private val messageDao = db.messageDao()
 
-    private val _models = MutableStateFlow<List<Model>>(emptyList())
+    private val _models = MutableStateFlow<List<Model>>(defaultModels())
     val models: StateFlow<List<Model>> = _models.asStateFlow()
 
     fun client(): OpenCodeClient = client()
 
+    /**
+     * Ships OpenCode Zen free models with the app so the picker always has
+     * defaults; the server-provided list (if any) is merged on top.
+     */
+    private fun defaultModels(): List<Model> =
+        FreeModels.LIST.map { Model(id = it, providerID = "opencode", name = it.removePrefix("opencode/")) }
+
     suspend fun refreshModels() {
-        runCatching { client().listModels() }
-            .onSuccess { _models.value = it }
+        runCatching { withTimeout(15_000) { client().listModels() } }
+            .onSuccess { serverModels ->
+                val merged = (serverModels.map { it.copy(providerID = it.providerID ?: "opencode") } +
+                    defaultModels().filter { d -> serverModels.none { s -> s.id == d.id } })
+                _models.value = merged
+            }
+            .onFailure { e ->
+                AppLog.e("refreshModels failed", e)
+                _models.value = _models.value.ifEmpty { defaultModels() }
+            }
+    }
+
+    suspend fun refreshSessions() {
+        runCatching { withTimeout(30_000) { client().listSessions() } }
+            .onSuccess { sessions ->
+                AppLog.i("sessions: ${sessions.size}")
+                sessionDao.upsertAll(sessions.map { it.toEntity(json) })
+            }
+            .onFailure { e -> AppLog.e("refreshSessions failed", e) }
     }
 
     fun observeSessions(): Flow<List<SessionEntity>> = sessionDao.observeAll()
 
     fun observeMessages(sessionId: String): Flow<List<MessageEntity>> =
         messageDao.observe(sessionId)
-
-    suspend fun refreshSessions() {
-        runCatching { client().listSessions() }
-            .onSuccess { sessions ->
-                sessionDao.upsertAll(sessions.map { it.toEntity(json) })
-            }
-    }
 
     suspend fun upsertSession(session: Session) {
         sessionDao.upsert(session.toEntity(json))

@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
+import dev.opencode.android.util.AppLog
 
 class SessionsViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -62,16 +64,20 @@ class SessionsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             _error.value = null
             try {
-                repo.client().createSession(
-                    SessionCreateRequest(
-                        title = title?.ifBlank { null },
-                        model = model?.let {
-                            ModelRef(id = it.id, providerID = it.providerID)
-                        },
-                    ),
-                )
+                val created = withTimeout(30_000) {
+                    repo.client().createSession(
+                        SessionCreateRequest(
+                            title = title?.ifBlank { null },
+                            model = model?.let {
+                                ModelRef(id = it.id, providerID = it.providerID)
+                            },
+                        ),
+                    )
+                }
+                AppLog.i("session created: ${created.id}")
                 repo.refreshSessions()
             } catch (e: Exception) {
+                AppLog.e("createSession failed", e)
                 _error.value = e.message ?: "Oturum oluşturulamadı"
             }
         }

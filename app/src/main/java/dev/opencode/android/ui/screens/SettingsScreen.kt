@@ -2,8 +2,6 @@ package dev.opencode.android.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,7 +22,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -35,14 +32,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import dev.opencode.android.data.prefs.EmbeddedDefaults
-import dev.opencode.android.server.OpenCodeServerManager
 import dev.opencode.android.ui.SettingsViewModel
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
@@ -51,13 +48,10 @@ fun SettingsScreen(
     val connection by vm.connection.collectAsState()
     val models by vm.models.collectAsState()
     val status by vm.status.collectAsState()
-    val embedded by vm.embedded.collectAsState()
-    val serverStatus by vm.serverStatus.collectAsState()
+    val logs by vm.logs.collectAsState()
 
-    var embeddedOn by remember { mutableStateOf(embedded.enabled) }
-    var embeddedModel by remember { mutableStateOf(embedded.model) }
-    var embeddedApiKey by remember { mutableStateOf(embedded.apiKey) }
     var showAddProvider by remember { mutableStateOf(false) }
+    var showLogs by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -81,84 +75,17 @@ fun SettingsScreen(
         ) {
             SectionTitle("Bağlantı")
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Cihaz içi sunucu (gömülü)", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        "opencode binary'si cihazda çalışır. Ücretsiz Zen modelleri varsayılan.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(checked = embeddedOn, onCheckedChange = { embeddedOn = it })
-            }
-
-            statusText(serverStatus)?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.secondary,
-                )
-            }
-
-            if (embeddedOn) {
-                OutlinedTextField(
-                    value = embeddedModel,
-                    onValueChange = { embeddedModel = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Model") },
-                    singleLine = true,
-                )
-                Text(
-                    "Ücretsiz Zen modelleri (zorunlu anahtar yok):",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    EmbeddedDefaults.FREE_MODELS.forEach { m ->
-                        OutlinedButton(
-                            onClick = { embeddedModel = m },
-                            modifier = Modifier.padding(bottom = 0.dp),
-                        ) {
-                            Text(m.removePrefix("opencode/"))
-                        }
-                    }
-                }
-                OutlinedTextField(
-                    value = embeddedApiKey,
-                    onValueChange = { embeddedApiKey = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Zen API anahtarı (isteğe bağlı)") },
-                    placeholder = { Text("oc_...") },
-                    singleLine = true,
-                )
-                Button(
-                    onClick = { vm.saveEmbedded(embeddedOn, embeddedModel, embeddedApiKey) },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Uygula ve yeniden başlat")
-                }
-                OutlinedButton(onClick = { vm.stopEmbeddedServer() }) {
-                    Text("Sunucuyu durdur")
-                }
-            } else {
-                OutlinedButton(
-                    onClick = { vm.saveEmbedded(false, embeddedModel, embeddedApiKey, restart = false) },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Uzak sunucuya bağlan")
-                }
-            }
-
-            HorizontalDivider()
-
             Text(
-                text = connection.serverUrl,
+                text = connection.serverUrl.ifBlank { "Bağlı sunucu yok — üst ekrandan bağlan." },
                 style = MaterialTheme.typography.bodyLarge,
             )
+            if (connection.serverUrl.isNotBlank()) {
+                Text(
+                    text = "Açılışta otomatik bu sunucuya bağlanılır.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             OutlinedButton(
                 onClick = vm::logout,
                 modifier = Modifier.fillMaxWidth(),
@@ -169,14 +96,19 @@ fun SettingsScreen(
 
             HorizontalDivider()
 
-            SectionTitle("Modeller (sunucudan)")
+            SectionTitle("Modeller")
             if (models.isEmpty()) {
                 Text(
-                    "Sunucu tarafında model/provider yapılandırılmamış görünüyor.",
+                    "Model listesi yüklenemedi — bağlantıyı kontrol et ve oturum ekranından yenile.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
+                Text(
+                    "Uygulamada varsayılan OpenCode Zen ücretsiz modelleri dahilidir. Aşağıda sunucunun listeleyebildikleri:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 models.take(8).forEach { model ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -197,6 +129,24 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+            }
+
+            HorizontalDivider()
+
+            SectionTitle("Günlük (log)")
+            Text(
+                "Sorun yaşarsan uygulamanın hata kaydını buradan görüntüleyip kopyalayabilirsin.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedButton(
+                onClick = {
+                    vm.refreshLogs()
+                    showLogs = true
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Uygulama loglarını göster")
             }
 
             HorizontalDivider()
@@ -231,14 +181,13 @@ fun SettingsScreen(
             onDismiss = { showAddProvider = false },
         )
     }
-}
 
-@Composable
-private fun statusText(status: OpenCodeServerManager.Status): String? = when (status) {
-    is OpenCodeServerManager.Status.Running -> "Gömülü sunucu çalışıyor: 127.0.0.1:${status.port}"
-    is OpenCodeServerManager.Status.Starting -> "Gömülü sunucu başlatılıyor…"
-    is OpenCodeServerManager.Status.Stopped -> "Gömülü sunucu durdu"
-    is OpenCodeServerManager.Status.Failed -> "Hata: ${status.message}"
+    if (showLogs) {
+        LogsDialog(
+            content = logs.orEmpty(),
+            onDismiss = { showLogs = false },
+        )
+    }
 }
 
 @Composable
@@ -248,6 +197,38 @@ private fun SectionTitle(text: String) {
         style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.primary,
+    )
+}
+
+@Composable
+private fun LogsDialog(
+    content: String,
+    onDismiss: () -> Unit,
+) {
+    val clipboard = LocalClipboardManager.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Uygulama logları") },
+        text = {
+            Text(
+                text = content.ifEmpty { "Henüz log yok." },
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Kapat") }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = { clipboard.setText(AnnotatedString(content)) },
+                enabled = content.isNotEmpty(),
+            ) {
+                Text("Kopyala")
+            }
+        },
     )
 }
 
