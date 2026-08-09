@@ -58,6 +58,31 @@ class OpenCodeServerManager(private val context: Context) {
 
     private val homeDir: File get() = File(context.filesDir, "home")
     private val serverLog: File get() = File(context.filesDir, "server.log")
+    private val lastErrorFile: File get() = File(context.filesDir, "last_error.txt")
+
+    fun lastError(): String = try {
+        if (lastErrorFile.exists()) lastErrorFile.readText().trim() else ""
+    } catch (_: Exception) {
+        ""
+    }
+
+    private fun rememberFailure(prefs: EmbeddedPrefs, message: String) {
+        try {
+            lastErrorFile.writeText(
+                buildString {
+                    appendLine("Timestamp: ${System.currentTimeMillis()}")
+                    appendLine("model=${prefs.model}")
+                    appendLine("loader=${loaderFile.exists()}")
+                    appendLine("binary=${binaryFile.exists()} size=${binaryFile.length()}")
+                    appendLine("libc=${File(binaryDir, "lib/libc.musl-aarch64.so.1").exists()}")
+                    appendLine("msg=$message")
+                    val t = logTail(4096)
+                    if (t.isNotEmpty()) append("log:\n").append(t)
+                },
+            )
+        } catch (_: Exception) {
+        }
+    }
 
     fun start(prefs: EmbeddedPrefs) {
         if (_status.value is Status.Running || _status.value is Status.Starting) return
@@ -85,16 +110,16 @@ class OpenCodeServerManager(private val context: Context) {
             } catch (e: Exception) {
                 process?.let { kill(it) }
                 process = null
-                _status.value = Status.Failed(
-                    buildString {
-                        append(e.message ?: "Sunucu açılamadı")
-                        val tail = logTail()
-                        if (tail.isNotEmpty()) {
-                            append("\n\nSon log:\n")
-                            append(tail)
-                        }
-                    },
-                )
+                val failMsg = buildString {
+                    append(e.message ?: "Sunucu açılamadı")
+                    val tail = logTail()
+                    if (tail.isNotEmpty()) {
+                        append("\n\nSon log:\n")
+                        append(tail)
+                    }
+                }
+                rememberFailure(prefs, failMsg)
+                _status.value = Status.Failed(failMsg)
             }
         }
     }
@@ -253,16 +278,26 @@ class OpenCodeServerManager(private val context: Context) {
 
     private suspend fun waitForHealth(port: Int) {
         var dead = false
+        var exit: Int? = null
         for (i in 0 until 200) {
             if (_status.value !is Status.Starting) return
             if (process?.isAlive == false) {
                 dead = true
+                exit = try {
+                    process?.exitValue()
+                } catch (_: Exception) {
+                    null
+                }
                 break
             }
             if (pingHealth(port)) return
             delay(750)
         }
-        if (dead) throw RuntimeException("Gömülü sunucu işlemi beklenmedik şekilde kapandı")
+        if (dead) {
+            throw RuntimeException(
+                "Gömülü sunucu işlemi beklenmedik şekilde kapandı (exit=${exit ?: "?"})",
+            )
+        }
         throw RuntimeException("Gömülü sunucu zaman aşımı: health yanıtı yok")
     }
 

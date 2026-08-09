@@ -19,7 +19,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
@@ -153,6 +155,13 @@ private fun EmbeddedFailed(
         }
         TextButton(onClick = onSwitchToRemote) {
             Text("Uzak sunucu kullan")
+        }
+        TextButton(
+            onClick = {
+                LocalClipboardManager.current.setText(AnnotatedString(message))
+            },
+        ) {
+            Text("Hatayı kopyala")
         }
     }
 }
