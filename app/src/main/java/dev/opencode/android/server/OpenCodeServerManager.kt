@@ -68,13 +68,14 @@ class OpenCodeServerManager(private val context: Context) {
 
     private fun rememberFailure(prefs: EmbeddedPrefs, message: String) {
         try {
+            var diag = ""
+            val d = File(context.filesDir, "diag.txt")
+            if (d.exists()) diag = d.readText().trim()
             lastErrorFile.writeText(
                 buildString {
                     appendLine("Timestamp: ${System.currentTimeMillis()}")
                     appendLine("model=${prefs.model}")
-                    appendLine("loader=${loaderFile.exists()}")
-                    appendLine("binary=${binaryFile.exists()} size=${binaryFile.length()}")
-                    appendLine("libc=${File(binaryDir, "lib/libc.musl-aarch64.so.1").exists()}")
+                    if (diag.isNotEmpty()) appendLine(diag)
                     appendLine("msg=$message")
                     val t = logTail(4096)
                     if (t.isNotEmpty()) append("log:\n").append(t)
@@ -100,6 +101,7 @@ class OpenCodeServerManager(private val context: Context) {
                 withContext(Dispatchers.IO) {
                     workspaceDir.mkdirs()
                     homeDir.mkdirs()
+                    exec("chmod", "775", workspaceDir.absolutePath)
                     writeConfig(prefs)
                     startProcess(prefs, port)
                 }
@@ -146,6 +148,9 @@ class OpenCodeServerManager(private val context: Context) {
 
     private suspend fun ensureBinary() = withContext(Dispatchers.IO) {
         binaryDir.mkdirs()
+        // Android umask/File API may leave files non-executable; force 0755
+        // across dir + files and verify the result actually sticks.
+        exec("chmod", "775", binaryDir.absolutePath)
         if (!binaryFile.exists() || binaryFile.length() == 0L) {
             if (!binaryBundled) {
                 error(
@@ -157,10 +162,52 @@ class OpenCodeServerManager(private val context: Context) {
                 binaryFile.outputStream().use { output -> input.copyTo(output) }
             }
         }
-        binaryFile.setExecutable(true, true)
-        // The musl build is dynamically linked and needs its loader + libs.
         copyAssetDir("opencode_bin/lib", File(binaryDir, "lib"))
-        if (loaderFile.exists()) loaderFile.setExecutable(true, true)
+        File(binaryDir, "lib").let { d ->
+            if (d.exists()) exec("chmod", "775", d.absolutePath)
+        }
+        listOf(binaryFile, loaderFile)
+            .filter { it.exists() }
+            .forEach { f ->
+                exec("chmod", "755", f.absolutePath)
+                f.setReadable(true, false)
+                f.setExecutable(true, false)
+                if (!f.canExecute()) {
+                    error("Exec izni ayarlanamadı: ${f.absolutePath}")
+                }
+            }
+        commitDiagnostics()
+    }
+
+    private fun commitDiagnostics() {
+        try {
+            val probe = execQuiet("/system/bin/sh", "-c", "echo exec-ok")
+            File(context.filesDir, "diag.txt").writeText(
+                "binary=${binaryFile.canExecute()} size=${binaryFile.length()}\n" +
+                    "loader=${loaderFile.canExecute()} size=${loaderFile.length()}\n" +
+                    "dir=${binaryDir.canRead()}/${binaryDir.canExecute()}\n" +
+                    "probe=${probe}\n",
+            )
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun exec(vararg cmd: String) {
+        try {
+            ProcessBuilder(*cmd).redirectErrorStream(true).start()
+                .apply { waitFor(5, java.util.concurrent.TimeUnit.SECONDS) }
+        } catch (_: Exception) {
+            // chmod may be unavailable; File.set* below still runs
+        }
+    }
+
+    private fun execQuiet(vararg cmd: String): String = try {
+        val p = ProcessBuilder(*cmd).redirectErrorStream(true).start()
+        val out = p.inputStream.bufferedReader().readText()
+        p.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+        out.trim()
+    } catch (e: Exception) {
+        "exec-err:${e.message}"
     }
 
     private fun copyAssetDir(assetPath: String, destDir: File) {
