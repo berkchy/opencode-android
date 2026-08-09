@@ -106,13 +106,17 @@ jobs:
             "https://dl-cdn.alpinelinux.org/alpine/v3.21/main/aarch64/musl-1.2.5-r11.apk"
           curl -fsSL -o /tmp/libgcc.apk \
             "https://dl-cdn.alpinelinux.org/alpine/v3.21/main/aarch64/libgcc-14.2.0-r4.apk"
+          curl -fsSL -o /tmp/libstdcxx.apk \
+            "https://dl-cdn.alpinelinux.org/alpine/v3.21/main/aarch64/libstdc%2B%2B-14.2.0-r4.apk"
           mkdir -p /tmp/alpine
           gzip -dc /tmp/musl.apk | tar -xf - -C /tmp/alpine
           gzip -dc /tmp/libgcc.apk | tar -xf - -C /tmp/alpine
+          gzip -dc /tmp/libstdcxx.apk | tar -xf - -C /tmp/alpine
           mkdir -p app/src/main/assets/opencode_bin/lib
           cp -a /tmp/alpine/lib/ld-musl-aarch64.so.1 app/src/main/assets/opencode_bin/lib/
           cp -a /tmp/alpine/lib/libc.musl-aarch64.so.1 app/src/main/assets/opencode_bin/lib/
           cp -a /tmp/alpine/usr/lib/libgcc_s.so.1 app/src/main/assets/opencode_bin/lib/
+          cp -a /tmp/alpine/usr/lib/libstdc++.so.6.0.33 app/src/main/assets/opencode_bin/lib/libstdc++.so.6
           ls -la app/src/main/assets/opencode_bin/ app/src/main/assets/opencode_bin/lib/
 
       - name: Build Debug + Release APKs

@@ -49,7 +49,19 @@ fun OpenCodeRoot() {
     val scope = rememberCoroutineScope()
 
     if (app.embeddedPrefs.enabled) {
-        when (serverStatus) {
+        if (android.os.Build.VERSION.SDK_INT < 31) {
+            EmbeddedFailed(
+                message = "Bu cihaz (Android ${android.os.Build.VERSION.RELEASE}, API " +
+                    android.os.Build.VERSION.SDK_INT + ") gömülü sunucuyu desteklemiyor. " +
+                    "Bun tabanlı binary Android 12+ (API 31) gerektirir; sistem (seccomp) burada çalışmasını engelliyor.",
+                onRetry = { app.server.restart() },
+                onSwitchToRemote = {
+                    scope.launch {
+                        app.settings.saveEmbedded(app.embeddedPrefs.copy(enabled = false))
+                    }
+                },
+            )
+        } else when (serverStatus) {
             is OpenCodeServerManager.Status.Running -> MainNav(startAtSessions = true)
             is OpenCodeServerManager.Status.Failed -> EmbeddedFailed(
                 message = (serverStatus as OpenCodeServerManager.Status.Failed).message,

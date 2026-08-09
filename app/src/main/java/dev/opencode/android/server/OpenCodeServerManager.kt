@@ -341,9 +341,13 @@ class OpenCodeServerManager(private val context: Context) {
             delay(750)
         }
         if (dead) {
-            throw RuntimeException(
-                "Gömülü sunucu işlemi beklenmedik şekilde kapandı (exit=${exit ?: "?"})",
-            )
+            throw RuntimeException(when (exit) {
+                159 -> "Bu cihazın seccomp/sistem politikası bu sunucuyu engelliyor (SIGSYS). " +
+                    "Bun tabanlı binary Android 12+ (API 31) gerektirir; mevcut sürüm: API " +
+                    android.os.Build.VERSION.SDK_INT + ". Gömülü sunucu bu cihazda çalışmaz."
+                127 -> "ld-musl yükleyici bulunamadı (lib/ eksik?)"
+                else -> "Gömülü sunucu işlemi beklenmedik şekilde kapandı (exit=${exit ?: "?"})"
+            })
         }
         throw RuntimeException("Gömülü sunucu zaman aşımı: health yanıtı yok")
     }
