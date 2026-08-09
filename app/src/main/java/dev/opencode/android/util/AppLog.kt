@@ -32,14 +32,16 @@ object AppLog {
 
     fun i(msg: String) = log(Log.INFO, msg)
 
-    fun tail(maxBytes: Int = 8192): String = try {
-        val f = java.io.File(fileLabel)
-        if (!f.exists()) return ""
-        val size = f.length()
-        val skip = (size - maxBytes).coerceAtLeast(0L)
-        f.inputStream().use { it.skip(skip); it.readBytes().toString(Charsets.UTF_8) }.trim()
-    } catch (_: Exception) {
-        ""
+    fun tail(maxBytes: Int = 8192): String {
+        return try {
+            val f = java.io.File(fileLabel)
+            if (!f.exists()) return ""
+            val size = f.length()
+            val skip = (size - maxBytes).coerceAtLeast(0L)
+            f.inputStream().use { it.skip(skip); it.readBytes().toString(Charsets.UTF_8) }.trim()
+        } catch (_: Exception) {
+            ""
+        }
     }
 
     private fun log(level: Int, msg: String) {
